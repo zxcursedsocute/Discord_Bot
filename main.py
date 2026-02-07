@@ -3,24 +3,21 @@ from discord.ext import commands
 from discord import option
 from datetime import datetime, timedelta
 
-# ===== INTENTS =====
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(intents=intents)
 
-# ===== SETTINGS =====
 MODERATOR_ROLE_NAME = "Moderator"
 BAN_COOLDOWN = timedelta(hours=6)
 KICK_COOLDOWN = timedelta(hours=2)
 LOG_CHANNEL_ID = 1456806578119376959
-YOUR_GUILD_ID = 1434230104694718508  # <-- ЗАМЕНИТЕ на ваш реальный ID сервера
+YOUR_GUILD_ID = 1434230104694718508
 
 last_ban_time = {}
 last_kick_time = {}
 
-# ===== HELPERS =====
 def has_moderator_role(member: discord.Member):
     return any(role.name == MODERATOR_ROLE_NAME for role in member.roles)
 
@@ -34,7 +31,6 @@ async def send_log(guild, message):
     if channel:
         await channel.send(message)
 
-# ===== EVENTS =====
 @bot.event
 async def on_ready():
     print(f"Bot is online as {bot.user}")
@@ -47,7 +43,6 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Error syncing commands: {e}")
 
-# ===== MESSAGE LISTENER FOR \text =====
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -63,7 +58,6 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# ===== BAN =====
 @bot.slash_command(description="Ban a user (moderators only)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to ban")
 @option("reason", str, description="Reason for ban")
@@ -98,7 +92,6 @@ async def ban(ctx, user: discord.Member, reason: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to ban this user.", ephemeral=True)
 
-# ===== KICK =====
 @bot.slash_command(description="Kick a user (moderators only)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to kick")
 @option("reason", str, description="Reason for kick")
@@ -133,7 +126,6 @@ async def kick(ctx, user: discord.Member, reason: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to kick this user.", ephemeral=True)
 
-# ===== TIMEOUT =====
 @bot.slash_command(description="Timeout a user (moderators only, no cooldown)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to timeout")
 @option("minutes", int, description="Duration in minutes")
@@ -161,7 +153,6 @@ async def timeout(ctx, user: discord.Member, minutes: int, reason: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to timeout this user.", ephemeral=True)
 
-# ===== TEXT COMMAND (SLASH) =====
 @bot.slash_command(description="Send text as the bot (moderators only)", guild_ids=[YOUR_GUILD_ID])
 @option("text", str, description="Text to send")
 async def text(ctx, text: str):
@@ -181,7 +172,6 @@ async def text(ctx, text: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to send messages in this channel.", ephemeral=True)
 
-# ===== TEST COMMAND =====
 @bot.slash_command(description="Test command: sends a message and deletes it shortly", guild_ids=[YOUR_GUILD_ID])
 async def test(ctx):
     moderator = ctx.author
@@ -192,7 +182,6 @@ async def test(ctx):
     await discord.utils.sleep_until(datetime.utcnow() + timedelta(seconds=5))
     await msg.delete()
 
-# ===== SHUTDOWN =====
 @bot.slash_command(description="Shut down the bot (owner only)", guild_ids=[YOUR_GUILD_ID])
 async def shutdown(ctx):
     if ctx.author.id != ctx.guild.owner_id:
@@ -201,6 +190,5 @@ async def shutdown(ctx):
     await ctx.respond("🔌 Bot is shutting down...")
     await bot.close()
 
-# ===== RUN BOT =====
 import os
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
