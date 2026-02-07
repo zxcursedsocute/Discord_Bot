@@ -84,13 +84,49 @@ async def ban(ctx, user: discord.Member, reason: str):
     try:
         await user.ban(reason=f"{reason} | Banned by {moderator}")
         last_ban_time[moderator.id] = now
-        await ctx.respond(f"🔨 **{user}** has been banned.\nReason: {reason}")
+        # Теперь показываем ID пользователя при бане
+        await ctx.respond(f"🔨 **{user}** (ID: `{user.id}`) has been banned.\nReason: {reason}")
         await send_log(
             ctx.guild,
-            f"🔨 **BAN**\nModerator: {moderator}\nUser: {user}\nReason: {reason}\nTime: <t:{int(now.timestamp())}:F>"
+            f"🔨 **BAN**\nModerator: {moderator}\nUser: {user} (ID: {user.id})\nReason: {reason}\nTime: <t:{int(now.timestamp())}:F>"
         )
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to ban this user.", ephemeral=True)
+
+@bot.slash_command(description="Unban a user by ID (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@option("user_id", int, description="ID of the user to unban")
+@option("reason", str, description="Reason for unban")
+async def unban(ctx, user_id: int, reason: str):
+    moderator = ctx.author
+    now = datetime.utcnow()
+
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
+        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+        return
+
+    try:
+        # Получаем информацию о пользователе по ID
+        user = await bot.fetch_user(user_id)
+        
+        # Проверяем, забанен ли пользователь
+        try:
+            ban_entry = await ctx.guild.fetch_ban(user)
+        except discord.NotFound:
+            await ctx.respond(f"❌ User with ID `{user_id}` is not banned.", ephemeral=True)
+            return
+
+        # Снимаем бан
+        await ctx.guild.unban(user, reason=f"{reason} | Unbanned by {moderator}")
+        
+        await ctx.respond(f"✅ User **{user}** (ID: `{user_id}`) has been unbanned.\nReason: {reason}")
+        await send_log(
+            ctx.guild,
+            f"✅ **UNBAN**\nModerator: {moderator}\nUser: {user} (ID: {user_id})\nReason: {reason}\nTime: <t:{int(now.timestamp())}:F>"
+        )
+    except discord.Forbidden:
+        await ctx.respond("❌ I don't have permission to unban users.", ephemeral=True)
+    except discord.HTTPException as e:
+        await ctx.respond(f"❌ Error: {str(e)}", ephemeral=True)
 
 @bot.slash_command(description="Kick a user (moderators only)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to kick")
@@ -171,16 +207,6 @@ async def text(ctx, text: str):
         )
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to send messages in this channel.", ephemeral=True)
-
-@bot.slash_command(description="Test command: sends a message and deletes it shortly", guild_ids=[YOUR_GUILD_ID])
-async def test(ctx):
-    moderator = ctx.author
-    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
-        await ctx.respond("❌ You must have the **Moderator** role to use this command.", ephemeral=True)
-        return
-    msg = await ctx.send("This is a test message!")
-    await discord.utils.sleep_until(datetime.utcnow() + timedelta(seconds=5))
-    await msg.delete()
 
 @bot.slash_command(description="Shut down the bot (owner only)", guild_ids=[YOUR_GUILD_ID])
 async def shutdown(ctx):
