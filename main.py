@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import option
 from datetime import datetime, timedelta
+import random
 
 intents = discord.Intents.default()
 intents.members = True
@@ -43,22 +44,7 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Error syncing commands: {e}")
 
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    if message.content.startswith(r"\text"):
-        content = message.content[5:].strip()
-        if content:
-            await message.channel.send(content)
-            await message.delete()
-        else:
-            await message.channel.send("❌ Provide text after \\text")
-
-    await bot.process_commands(message)
-
-@bot.slash_command(description="Ban a user (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Ban a user (moderators only 6h cd)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to ban")
 @option("reason", str, description="Reason for ban")
 async def ban(ctx, user: discord.Member, reason: str):
@@ -84,7 +70,6 @@ async def ban(ctx, user: discord.Member, reason: str):
     try:
         await user.ban(reason=f"{reason} | Banned by {moderator}")
         last_ban_time[moderator.id] = now
-        # Теперь показываем ID пользователя при бане
         await ctx.respond(f"🔨 **{user}** (ID: `{user.id}`) has been banned.\nReason: {reason}")
         await send_log(
             ctx.guild,
@@ -105,17 +90,14 @@ async def unban(ctx, user_id: int, reason: str):
         return
 
     try:
-        # Получаем информацию о пользователе по ID
         user = await bot.fetch_user(user_id)
         
-        # Проверяем, забанен ли пользователь
         try:
             ban_entry = await ctx.guild.fetch_ban(user)
         except discord.NotFound:
             await ctx.respond(f"❌ User with ID `{user_id}` is not banned.", ephemeral=True)
             return
 
-        # Снимаем бан
         await ctx.guild.unban(user, reason=f"{reason} | Unbanned by {moderator}")
         
         await ctx.respond(f"✅ User **{user}** (ID: `{user_id}`) has been unbanned.\nReason: {reason}")
@@ -128,7 +110,7 @@ async def unban(ctx, user_id: int, reason: str):
     except discord.HTTPException as e:
         await ctx.respond(f"❌ Error: {str(e)}", ephemeral=True)
 
-@bot.slash_command(description="Kick a user (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Kick a user (moderators only 2h cd)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to kick")
 @option("reason", str, description="Reason for kick")
 async def kick(ctx, user: discord.Member, reason: str):
@@ -189,24 +171,71 @@ async def timeout(ctx, user: discord.Member, minutes: int, reason: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to timeout this user.", ephemeral=True)
 
-@bot.slash_command(description="Send text as the bot (moderators only)", guild_ids=[YOUR_GUILD_ID])
-@option("text", str, description="Text to send")
-async def text(ctx, text: str):
+@bot.slash_command(description="Send text or image as the bot (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@option("text", str, description="Text to send", required=False)
+@option("image", discord.Attachment, description="Image to send", required=False)
+async def text(ctx, text: str = None, image: discord.Attachment = None):
     moderator = ctx.author
     
     if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
         await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
         return
     
+    if not text and not image:
+        await ctx.respond("❌ You must provide text or an image.", ephemeral=True)
+        return
+    
     try:
-        await ctx.send(text)
+        if image:
+            if image.content_type and image.content_type.startswith('image/'):
+                file = await image.to_file()
+                if text:
+                    await ctx.send(content=text, file=file)
+                else:
+                    await ctx.send(file=file)
+            else:
+                await ctx.respond("❌ The attachment must be an image.", ephemeral=True)
+                return
+        else:
+            await ctx.send(text)
+        
         await ctx.respond("✅ Message sent!", ephemeral=True)
         await send_log(
             ctx.guild,
-            f"📝 **TEXT COMMAND**\nModerator: {moderator}\nText: {text}\nChannel: {ctx.channel.mention}\nTime: <t:{int(datetime.utcnow().timestamp())}:F>"
+            f"📝 **TEXT COMMAND**\nModerator: {moderator}\nText: {text if text else 'No text'}\nImage: {'Yes' if image else 'No'}\nChannel: {ctx.channel.mention}\nTime: <t:{int(datetime.utcnow().timestamp())}:F>"
         )
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to send messages in this channel.", ephemeral=True)
+
+@bot.slash_command(description="Check if user is a femboy", guild_ids=[YOUR_GUILD_ID])
+@option("user", discord.Member, description="User to check")
+async def isfemboy(ctx, user: discord.Member):
+    percentage = random.randint(50, 100)
+    emoji = "🌸" if percentage > 75 else "💅" if percentage > 60 else "✨"
+    
+    await ctx.respond(f"{emoji} **{user.name}** is **{percentage}%** femboy! {emoji}")
+
+@bot.slash_command(description="Get a random femboy photo", guild_ids=[YOUR_GUILD_ID])
+async def femboy_photo(ctx):
+    femboy_gifs = [
+        "https://media.tenor.com/V45ZTAwxT7kAAAAd/femboy-anime-femboy.gif",
+        "https://media.tenor.com/VOKlDEx2SqoAAAAd/femboy.gif",
+        "https://media.tenor.com/9iHWmzK4x8kAAAAd/astolfo-fate-grand-order.gif",
+        "https://media.tenor.com/wCQs9VcY9wMAAAAd/femboy-hrt.gif",
+        "https://media.tenor.com/SoUJNjJZ8e0AAAAd/astolfo-fate.gif",
+        "https://media.tenor.com/ayX6pFCOPTQAAAAd/femboy-astolfo.gif"
+    ]
+    
+    gif_url = random.choice(femboy_gifs)
+    
+    embed = discord.Embed(
+        title="🌸 Femboy Photo 🌸",
+        color=discord.Color.pink()
+    )
+    embed.set_image(url=gif_url)
+    embed.set_footer(text="Powered by Femboy Bot")
+    
+    await ctx.respond(embed=embed)
 
 @bot.slash_command(description="Shut down the bot (owner only)", guild_ids=[YOUR_GUILD_ID])
 async def shutdown(ctx):
