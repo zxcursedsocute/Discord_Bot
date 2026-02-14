@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord import option
 from datetime import datetime, timedelta
 import random
+import os
 
 intents = discord.Intents.default()
 intents.members = True
@@ -207,6 +208,55 @@ async def text(ctx, text: str = None, image: discord.Attachment = None):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to send messages in this channel.", ephemeral=True)
 
+@bot.slash_command(description="Warn a user (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@option("user", discord.Member, description="User to warn")
+@option("reason", str, description="Reason for warning")
+async def warn(ctx, user: discord.Member, reason: str):
+    moderator = ctx.author
+    now = datetime.utcnow()
+
+    # Permission checks
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
+        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+        return
+
+    if has_moderator_role(user) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot warn another moderator.", ephemeral=True)
+        return
+
+    # Try to DM the user
+    dm_sent = False
+    try:
+        embed = discord.Embed(
+            title=f"⚠️ You have been warned in {ctx.guild.name}",
+            color=discord.Color.orange(),
+            timestamp=now
+        )
+        embed.add_field(name="Moderator", value=moderator.mention, inline=True)
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.set_footer(text=f"User ID: {user.id}")
+        await user.send(embed=embed)
+        dm_sent = True
+    except discord.Forbidden:
+        dm_sent = False
+
+    # Log the warn
+    log_msg = (
+        f"⚠️ **WARN**\n"
+        f"Moderator: {moderator}\n"
+        f"User: {user} (ID: {user.id})\n"
+        f"Reason: {reason}\n"
+        f"DM Sent: {'Yes' if dm_sent else 'No'}\n"
+        f"Time: <t:{int(now.timestamp())}:F>"
+    )
+    await send_log(ctx.guild, log_msg)
+
+    # Respond to moderator
+    response = f"⚠️ **{user}** has been warned.\nReason: {reason}"
+    if not dm_sent:
+        response += "\n*(Could not send DM to user)*"
+    await ctx.respond(response)
+
 @bot.slash_command(description="Check if user is a femboy", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to check")
 async def isfemboy(ctx, user: discord.Member):
@@ -245,5 +295,4 @@ async def shutdown(ctx):
     await ctx.respond("🔌 Bot is shutting down...")
     await bot.close()
 
-import os
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
