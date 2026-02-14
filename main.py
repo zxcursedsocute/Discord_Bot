@@ -12,6 +12,7 @@ intents.message_content = True
 bot = commands.Bot(intents=intents)
 
 MODERATOR_ROLE_NAME = "Moderator"
+ADMINISTRATOR_ROLE_NAME = "Administrator"
 BAN_COOLDOWN = timedelta(hours=6)
 KICK_COOLDOWN = timedelta(hours=2)
 LOG_CHANNEL_ID = 1456806578119376959
@@ -22,6 +23,9 @@ last_kick_time = {}
 
 def has_moderator_role(member: discord.Member):
     return any(role.name == MODERATOR_ROLE_NAME for role in member.roles)
+
+def has_administrator_role(member: discord.Member):
+    return any(role.name == ADMINISTRATOR_ROLE_NAME for role in member.roles)
 
 def remaining_time(delta):
     hours = int(delta.total_seconds() // 3600)
@@ -45,19 +49,27 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Error syncing commands: {e}")
 
-@bot.slash_command(description="Ban a user (moderators only 6h cd)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Ban a user (moderators/administrators only 6h cd)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to ban")
 @option("reason", str, description="Reason for ban")
 async def ban(ctx, user: discord.Member, reason: str):
     moderator = ctx.author
     now = datetime.utcnow()
 
-    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
-        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator) and not has_administrator_role(moderator):
+        await ctx.respond("❌ You must have **Moderator** or **Administrator** role.", ephemeral=True)
         return
 
-    if has_moderator_role(user) and moderator.id != ctx.guild.owner_id:
-        await ctx.respond("❌ You cannot ban another moderator.", ephemeral=True)
+    if has_administrator_role(user) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot ban an Administrator.", ephemeral=True)
+        return
+
+    if has_moderator_role(user) and not has_administrator_role(moderator) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot ban another Moderator.", ephemeral=True)
+        return
+
+    if has_moderator_role(user) and has_administrator_role(moderator) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ Administrators cannot ban Moderators.", ephemeral=True)
         return
 
     last_time = last_ban_time.get(moderator.id)
@@ -79,15 +91,15 @@ async def ban(ctx, user: discord.Member, reason: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to ban this user.", ephemeral=True)
 
-@bot.slash_command(description="Unban a user by ID (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Unban a user by ID (moderators/administrators only)", guild_ids=[YOUR_GUILD_ID])
 @option("user_id", int, description="ID of the user to unban")
 @option("reason", str, description="Reason for unban")
 async def unban(ctx, user_id: int, reason: str):
     moderator = ctx.author
     now = datetime.utcnow()
 
-    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
-        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator) and not has_administrator_role(moderator):
+        await ctx.respond("❌ You must have **Moderator** or **Administrator** role.", ephemeral=True)
         return
 
     try:
@@ -111,19 +123,27 @@ async def unban(ctx, user_id: int, reason: str):
     except discord.HTTPException as e:
         await ctx.respond(f"❌ Error: {str(e)}", ephemeral=True)
 
-@bot.slash_command(description="Kick a user (moderators only 2h cd)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Kick a user (moderators/administrators only 2h cd)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to kick")
 @option("reason", str, description="Reason for kick")
 async def kick(ctx, user: discord.Member, reason: str):
     moderator = ctx.author
     now = datetime.utcnow()
 
-    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
-        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator) and not has_administrator_role(moderator):
+        await ctx.respond("❌ You must have **Moderator** or **Administrator** role.", ephemeral=True)
         return
 
-    if has_moderator_role(user) and moderator.id != ctx.guild.owner_id:
-        await ctx.respond("❌ You cannot kick another moderator.", ephemeral=True)
+    if has_administrator_role(user) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot kick an Administrator.", ephemeral=True)
+        return
+
+    if has_moderator_role(user) and not has_administrator_role(moderator) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot kick another Moderator.", ephemeral=True)
+        return
+
+    if has_moderator_role(user) and has_administrator_role(moderator) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ Administrators cannot kick Moderators.", ephemeral=True)
         return
 
     last_time = last_kick_time.get(moderator.id)
@@ -145,7 +165,7 @@ async def kick(ctx, user: discord.Member, reason: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to kick this user.", ephemeral=True)
 
-@bot.slash_command(description="Timeout a user (moderators only, no cooldown)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Timeout a user (moderators/administrators only)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to timeout")
 @option("minutes", int, description="Duration in minutes")
 @option("reason", str, description="Reason for timeout")
@@ -153,12 +173,16 @@ async def timeout(ctx, user: discord.Member, minutes: int, reason: str):
     moderator = ctx.author
     now = datetime.utcnow()
 
-    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
-        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator) and not has_administrator_role(moderator):
+        await ctx.respond("❌ You must have **Moderator** or **Administrator** role.", ephemeral=True)
         return
 
-    if has_moderator_role(user) and moderator.id != ctx.guild.owner_id:
-        await ctx.respond("❌ You cannot timeout another moderator.", ephemeral=True)
+    if has_administrator_role(user) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot timeout an Administrator.", ephemeral=True)
+        return
+
+    if has_moderator_role(user) and not has_administrator_role(moderator) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot timeout another Moderator.", ephemeral=True)
         return
 
     try:
@@ -172,14 +196,14 @@ async def timeout(ctx, user: discord.Member, minutes: int, reason: str):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to timeout this user.", ephemeral=True)
 
-@bot.slash_command(description="Send text or image as the bot (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Send text or image as the bot (moderators/administrators only)", guild_ids=[YOUR_GUILD_ID])
 @option("text", str, description="Text to send", required=False)
 @option("image", discord.Attachment, description="Image to send", required=False)
 async def text(ctx, text: str = None, image: discord.Attachment = None):
     moderator = ctx.author
     
-    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
-        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator) and not has_administrator_role(moderator):
+        await ctx.respond("❌ You must have **Moderator** or **Administrator** role.", ephemeral=True)
         return
     
     if not text and not image:
@@ -208,23 +232,25 @@ async def text(ctx, text: str = None, image: discord.Attachment = None):
     except discord.Forbidden:
         await ctx.respond("❌ I don't have permission to send messages in this channel.", ephemeral=True)
 
-@bot.slash_command(description="Warn a user (moderators only)", guild_ids=[YOUR_GUILD_ID])
+@bot.slash_command(description="Warn a user by sending them a private message (moderators/administrators only)", guild_ids=[YOUR_GUILD_ID])
 @option("user", discord.Member, description="User to warn")
 @option("reason", str, description="Reason for warning")
 async def warn(ctx, user: discord.Member, reason: str):
     moderator = ctx.author
     now = datetime.utcnow()
 
-    # Permission checks
-    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator):
-        await ctx.respond("❌ You must have the **Moderator** role.", ephemeral=True)
+    if moderator.id != ctx.guild.owner_id and not has_moderator_role(moderator) and not has_administrator_role(moderator):
+        await ctx.respond("❌ You must have **Moderator** or **Administrator** role.", ephemeral=True)
         return
 
-    if has_moderator_role(user) and moderator.id != ctx.guild.owner_id:
-        await ctx.respond("❌ You cannot warn another moderator.", ephemeral=True)
+    if has_administrator_role(user) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot warn an Administrator.", ephemeral=True)
         return
 
-    # Try to DM the user
+    if has_moderator_role(user) and not has_administrator_role(moderator) and moderator.id != ctx.guild.owner_id:
+        await ctx.respond("❌ You cannot warn another Moderator.", ephemeral=True)
+        return
+
     dm_sent = False
     try:
         embed = discord.Embed(
@@ -240,7 +266,6 @@ async def warn(ctx, user: discord.Member, reason: str):
     except discord.Forbidden:
         dm_sent = False
 
-    # Log the warn
     log_msg = (
         f"⚠️ **WARN**\n"
         f"Moderator: {moderator}\n"
@@ -251,7 +276,6 @@ async def warn(ctx, user: discord.Member, reason: str):
     )
     await send_log(ctx.guild, log_msg)
 
-    # Respond to moderator
     response = f"⚠️ **{user}** has been warned.\nReason: {reason}"
     if not dm_sent:
         response += "\n*(Could not send DM to user)*"
@@ -264,28 +288,6 @@ async def isfemboy(ctx, user: discord.Member):
     emoji = "🌸" if percentage > 75 else "💅" if percentage > 60 else "✨"
     
     await ctx.respond(f"{emoji} **{user.name}** is **{percentage}%** femboy! {emoji}")
-
-@bot.slash_command(description="Get a random femboy photo", guild_ids=[YOUR_GUILD_ID])
-async def femboy_photo(ctx):
-    femboy_gifs = [
-        "https://media.tenor.com/V45ZTAwxT7kAAAAd/femboy-anime-femboy.gif",
-        "https://media.tenor.com/VOKlDEx2SqoAAAAd/femboy.gif",
-        "https://media.tenor.com/9iHWmzK4x8kAAAAd/astolfo-fate-grand-order.gif",
-        "https://media.tenor.com/wCQs9VcY9wMAAAAd/femboy-hrt.gif",
-        "https://media.tenor.com/SoUJNjJZ8e0AAAAd/astolfo-fate.gif",
-        "https://media.tenor.com/ayX6pFCOPTQAAAAd/femboy-astolfo.gif"
-    ]
-    
-    gif_url = random.choice(femboy_gifs)
-    
-    embed = discord.Embed(
-        title="🌸 Femboy Photo 🌸",
-        color=discord.Color.pink()
-    )
-    embed.set_image(url=gif_url)
-    embed.set_footer(text="Powered by Femboy Bot")
-    
-    await ctx.respond(embed=embed)
 
 @bot.slash_command(description="Shut down the bot (owner only)", guild_ids=[YOUR_GUILD_ID])
 async def shutdown(ctx):
