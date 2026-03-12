@@ -13,7 +13,7 @@ bot = commands.Bot(intents=intents)
 
 MODERATOR_ROLE_NAME = "Moderator"
 ADMINISTRATOR_ROLE_NAME = "Administrator"
-BAN_COOLDOWN = timedelta(hours=6)
+BAN_COOLDOWN = timedelta(minutes=1)
 KICK_COOLDOWN = timedelta(hours=2)
 LOG_CHANNEL_ID = 1456806578119376959
 YOUR_GUILD_ID = 1434230104694718508
