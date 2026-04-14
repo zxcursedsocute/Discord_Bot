@@ -404,4 +404,25 @@ async def shutdown(ctx):
     await ctx.respond("🔌 Bot is shutting down...")
     await bot.close()
 
+@bot.slash_command(description="Check if user is gay", guild_ids=[YOUR_GUILD_ID])
+@option("user", discord.Member, description="User to check")
+async def isgay(ctx, user: discord.Member):
+    if ctx.author.id == ctx.guild.owner_id or ctx.author.name == "maryhoursleft":
+        percentage = 100
+    else:
+        percentage = random.randint(0, 100)
+    
+    if percentage == 100:
+        emoji = "🏳️‍🌈"
+    elif percentage > 75:
+        emoji = "🌈"
+    elif percentage > 50:
+        emoji = "💅"
+    elif percentage > 25:
+        emoji = "👀"
+    else:
+        emoji = "🤷"
+        
+    await ctx.respond(f"{emoji} **{user.name}** is **{percentage}%** gay! {emoji}")
+
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
